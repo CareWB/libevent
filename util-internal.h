@@ -50,11 +50,25 @@
 extern "C" {
 #endif
 
+/* __has_attribute() wrapper */
+#ifdef __has_attribute
+#define EVUTIL_HAS_ATTRIBUTE __has_attribute
+#endif
+/** clang 3 __has_attribute misbehaves in some versions */
+#if defined(__clang__) && \
+	__clang__ == 1 && __clang_major__ == 3 && \
+	(__clang_minor__ >= 2 && __clang_minor__ <= 5)
+#undef EVUTIL_HAS_ATTRIBUTE
+#endif
+#ifndef EVUTIL_HAS_ATTRIBUTE
+#define EVUTIL_HAS_ATTRIBUTE(x) 0
+#endif
+
 /* If we need magic to say "inline", get it for free internally. */
 #ifdef EVENT__inline
 #define inline EVENT__inline
 #endif
-#ifdef EVENT____func__
+#if defined(EVENT____func__) && !defined(__func__)
 #define __func__ EVENT____func__
 #endif
 
@@ -306,6 +320,12 @@ ev_int32_t evutil_weakrand_range_(struct evutil_weakrand_state *seed, ev_int32_t
 #define EVUTIL_UNLIKELY(p) __builtin_expect(!!(p),0)
 #else
 #define EVUTIL_UNLIKELY(p) (p)
+#endif
+
+#if EVUTIL_HAS_ATTRIBUTE(fallthrough)
+#define EVUTIL_FALLTHROUGH __attribute__((fallthrough))
+#else
+#define EVUTIL_FALLTHROUGH /* fallthrough */
 #endif
 
 /* Replacement for assert() that calls event_errx on failure. */

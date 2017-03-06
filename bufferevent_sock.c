@@ -192,6 +192,10 @@ bufferevent_readcb(evutil_socket_t fd, short event, void *arg)
 		int err = evutil_socket_geterror(fd);
 		if (EVUTIL_ERR_RW_RETRIABLE(err))
 			goto reschedule;
+		if (EVUTIL_ERR_CONNECT_REFUSED(err)) {
+			bufev_p->connection_refused = 1;
+			goto done;
+		}
 		/* error case */
 		what |= BEV_EVENT_ERROR;
 	} else if (res == 0) {
@@ -245,8 +249,8 @@ bufferevent_writecb(evutil_socket_t fd, short event, void *arg)
 		/* we need to fake the error if the connection was refused
 		 * immediately - usually connection to localhost on BSD */
 		if (bufev_p->connection_refused) {
-		  bufev_p->connection_refused = 0;
-		  c = -1;
+			bufev_p->connection_refused = 0;
+			c = -1;
 		}
 
 		if (c == 0)
@@ -434,13 +438,12 @@ bufferevent_socket_connect(struct bufferevent *bev,
 		/* The connect succeeded already. How very BSD of it. */
 		result = 0;
 		bufev_p->connecting = 1;
-		event_active(&bev->ev_write, EV_WRITE, 1);
+		bufferevent_trigger_nolock_(bev, EV_WRITE, BEV_OPT_DEFER_CALLBACKS);
 	} else {
 		/* The connect failed already.  How very BSD of it. */
-		bufev_p->connection_refused = 1;
-		bufev_p->connecting = 1;
 		result = 0;
-		event_active(&bev->ev_write, EV_WRITE, 1);
+		bufferevent_run_eventcb_(bev, BEV_EVENT_ERROR, BEV_OPT_DEFER_CALLBACKS);
+		bufferevent_disable(bev, EV_WRITE|EV_READ);
 	}
 
 	goto done;
